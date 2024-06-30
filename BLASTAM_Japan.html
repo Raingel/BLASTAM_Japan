@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLASTAM Risk Assessment Map</title>
+    <title>稲熱病のBLASTAMリスク評価マップ</title>
+    <meta name="description" content="稲熱病のBLASTAMリスク評価を視覚的に表示するマップ。各地点のリスク評価スコアをカラーコードで示します。">
+    <meta name="keywords" content="稲熱病, BLASTAM, リスク評価, 気象データ, アメダス, リスクマップ">
+    <meta name="robots" content="index, follow">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
         body,
@@ -36,10 +39,44 @@
         #controls {
             height: 10%;
             display: flex;
+            align-items: center;
+            background-color: #f1f1f1;
+        }
+
+        #info {
+            display: none;
+            position: fixed;
+            top: 10%;
+            left: 10%;
+            width: 80%;
+            height: 80%;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            overflow-y: auto;
+            z-index: 1001;
+        }
+
+        #infoButton {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 24px;
+            text-align: center;
+            line-height: 40px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        #dateSliderContainer {
+            width: 90%;
+            display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background-color: #f1f1f1;
         }
 
         #dateSlider {
@@ -79,8 +116,8 @@
         }
 
         .popup-content {
-            max-height: 60vh; /* 視窗高度 */
-            max-width: 70vw; /* 視窗寬度 */
+            max-height: 70vh;
+            max-width: 50vw;
             overflow-y: auto;
         }
 
@@ -89,17 +126,29 @@
         }
     </style>
 </head>
-
 <body>
-    <div id="loading">Loading data, please wait...</div>
+    <div id="loading">データを読み込んでいます。お待ちください...</div>
     <div id="map"></div>
     <div id="controls">
-        <select id="modelSelect">
-            <option value="blastam">BLASTAM</option>
-            <!-- 可以在這裡添加其他模型選項 -->
-        </select>
-        <input type="range" id="dateSlider" min="0" max="19" value="0">
-        <span id="dateDisplay"></span>
+        <button id="infoButton">?</button>
+        <div id="dateSliderContainer">
+            <select id="modelSelect">
+                <option value="blastam">BLASTAM</option>
+                <!-- ここに他のモデルオプションを追加できます -->
+            </select>
+            <input type="range" id="dateSlider" min="0" max="19" value="0">
+            <span id="dateDisplay"></span>
+        </div>
+    </div>
+    <div id="info">
+        <p>このウェブページのリポジトリは<a href="https://github.com/Raingel/BLASTAM_Japan" target="_blank">https://github.com/Raingel/BLASTAM_Japan</a>にあります。</p>
+        <p>計算公式は次のリファレンスから引用されています: 越水幸男. 1988. 「アメダス資料による葉いもち発生予察法」。<a href="https://agriknowledge.affrc.go.jp/RN/2030411788" target="_blank">https://agriknowledge.affrc.go.jp/RN/2030411788</a></p>
+        <p>実装は <a href="https://github.com/Raingel/BLASTAM" target="_blank">https://github.com/Raingel/BLASTAM</a> によるものです。</p>
+        <p>赤色は「好適条件」を示します。</p>
+        <p>黄色は「準好適条件」を示します。</p>
+        <p>緑色は「非好適条件」を示します。</p>
+        <p>気象データは <a href="https://www.data.jma.go.jp/gmd/risk/obsdl/" target="_blank">https://www.data.jma.go.jp/gmd/risk/obsdl/ Amedas</a> から取得しています。</p>
+        <button onclick="closeInfo()">閉じる</button>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
@@ -175,7 +224,7 @@
         }
 
         function createPopupContent(station, stationId) {
-            let tableHtml = '<table><tr><th>Date</th>';
+            let tableHtml = '<table><tr><th>日付</th>';
             for (let i = 0; i < numDays; i++) {
                 tableHtml += `<th>${getDateString(i + 1)}</th>`;
             }
@@ -219,6 +268,14 @@
             return `<div class="popup-content"><b>${station.局名}</b>${stationInfo}${tableHtml}</div>`;
         }
 
+        function closeInfo() {
+            document.getElementById('info').style.display = 'none';
+        }
+
+        document.getElementById('infoButton').addEventListener('click', () => {
+            document.getElementById('info').style.display = 'block';
+        });
+
         $(document).ready(async () => {
             try {
                 stationData = await loadCSV(stationDataUrl);
@@ -231,7 +288,7 @@
                     }
                 }
                 $('#loading').hide();
-                $('#dateDisplay').text(getDateString(1)); // 預設顯示昨天的日期
+                $('#dateDisplay').text(getDateString(1)); // 預設顯示昨天の日期
                 addMarkers(1); // 明確設置初始的 dateIndex 為 1
 
                 $('#dateSlider').on('input', function () {
@@ -240,7 +297,7 @@
                     addMarkers(dateIndex);
                 });
             } catch (error) {
-                console.error('Failed to load data', error);
+                console.error('データの読み込みに失敗しました', error);
             }
         });
     </script>
