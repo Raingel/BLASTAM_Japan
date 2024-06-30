@@ -1,0 +1,40 @@
+name: AMeDAS BLASTAM Risk Assessment
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * *'  # 每天00:00 UTC執行
+
+jobs:
+  blastam-risk-assessment:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout AMeDAS_visualization repository
+      uses: actions/checkout@v2
+
+    - name: Clone Weather Data Repository
+      run: git clone https://github.com/Raingel/AMeDAS_visualization.git
+
+    - name: Install Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'
+
+    - name: Install dependencies
+      run: pip install pandas numpy requests
+
+    - name: Run BLASTAM Risk Assessment
+      run: python run_blastam_assessment.py
+
+    - name: Commit and push results
+      run: |
+        git config --global user.name 'github-actions'
+        git config --global user.email 'github-actions@github.com'
+        git add data/
+        git commit -m "BLASTAM Risk Assessment results for $(date +'%Y-%m-%d')"
+        git push origin main
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
