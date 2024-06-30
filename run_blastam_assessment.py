@@ -327,7 +327,7 @@ def main():
     os.makedirs(result_dir, exist_ok=True)
 
     today = datetime.now().strftime('%Y-%m-%d')
-    dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(120)]
+    dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
     
     for date in dates:
         results = []
