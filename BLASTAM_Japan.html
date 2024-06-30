@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLASTAM Risk Assessment Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        body,
+        html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            height: 90%;
+        }
+
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            z-index: 1000;
+        }
+
+        #controls {
+            height: 10%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: #f1f1f1;
+        }
+
+        #dateSlider {
+            width: 80%;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .low-risk {
+            background-color: green;
+            color: white;
+        }
+
+        .medium-risk {
+            background-color: yellow;
+            color: black;
+        }
+
+        .high-risk {
+            background-color: red;
+            color: white;
+        }
+
+        .popup-content {
+            max-height: 60vh; /* 視窗高度 */
+            max-width: 70vw; /* 視窗寬度 */
+            overflow-y: auto;
+        }
+
+        .station-info {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading">Loading data, please wait...</div>
+    <div id="map"></div>
+    <div id="controls">
+        <select id="modelSelect">
+            <option value="blastam">BLASTAM</option>
+            <!-- 可以在這裡添加其他模型選項 -->
+        </select>
+        <input type="range" id="dateSlider" min="0" max="19" value="0">
+        <span id="dateDisplay"></span>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-csv/0.8.9/jquery.csv.min.js"></script>
+    <script>
+        const map = L.map('map').setView([39.7036, 141.1527], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+        }).addTo(map);
+
+        const stationDataUrl = 'https://raw.githubusercontent.com/Raingel/AMeDAS_visualization/main/stations/merged_sta_list.csv';
+        const forecastDataUrl = 'https://raw.githubusercontent.com/Raingel/BLASTAM_Japan/main/data/';
+
+        let stationData = [];
+        let forecastData = [];
+        const markers = [];
+        const numDays = 20;
+
+        function loadCSV(url) {
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url,
+                    dataType: 'text',
+                }).done((data) => {
+                    const parsedData = $.csv.toObjects(data);
+                    resolve(parsedData);
+                }).fail((error) => {
+                    reject(error);
+                });
+            });
+        }
+
+        function getDateString(daysAgo) {
+            const date = new Date();
+            date.setDate(date.getDate() - daysAgo);
+            return date.toISOString().split('T')[0];
+        }
+
+        function addMarkers(dateIndex) {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers.length = 0;
+
+            const dateStr = getDateString(dateIndex);
+            const forecast = forecastData[dateStr];
+
+            if (!forecast) return;
+
+            forecast.forEach(record => {
+                const station = stationData.find(s => s.局ID === record['Station ID']);
+                if (station) {
+                    let color;
+                    if (record['Blast Score'] == -1) {
+                        color = 'green';
+                    } else if (record['Blast Score'] == 3) {
+                        color = 'red';
+                    } else {
+                        color = 'yellow';
+                    }
+
+                    const marker = L.circleMarker([station.緯度_x, station.経度_x], {
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: 0.8,
+                        radius: 8,
+                        weight: 0 // 沒有外框
+                    }).addTo(map);
+
+                    marker.bindPopup(createPopupContent(station, record['Station ID']));
+                    markers.push(marker);
+                }
+            });
+        }
+
+        function createPopupContent(station, stationId) {
+            let tableHtml = '<table><tr><th>Date</th>';
+            for (let i = 0; i < numDays; i++) {
+                tableHtml += `<th>${getDateString(i + 1)}</th>`;
+            }
+            tableHtml += '</tr><tr><td>Blast Score</td>';
+            for (let i = 0; i < numDays; i++) {
+                const dateStr = getDateString(i + 1);
+                const forecast = forecastData[dateStr];
+                let riskClass = '';
+                let blastScore = '';
+                if (forecast) {
+                    const record = forecast.find(r => r['Station ID'] === stationId);
+                    if (record) {
+                        blastScore = record['Blast Score'];
+                        if (record['Blast Score'] == -1) {
+                            riskClass = 'low-risk';
+                        } else if (record['Blast Score'] == 3) {
+                            riskClass = 'high-risk';
+                        } else {
+                            riskClass = 'medium-risk';
+                        }
+                    }
+                }
+                tableHtml += `<td class="${riskClass}">${blastScore}</td>`;
+            }
+            tableHtml += '</tr></table>';
+
+            const stationInfo = `
+                <div class="station-info">
+                    <b>局ID:</b> ${station.局ID}<br>
+                    <b>局名:</b> ${station.局名}<br>
+                    <b>緯度:</b> ${station.緯度_x}<br>
+                    <b>経度:</b> ${station.経度_x}<br>
+                    <b>都府県振興局:</b> ${station.都府県振興局}<br>
+                    <b>観測所番号:</b> ${station.観測所番号}<br>
+                    <b>種類:</b> ${station.種類}<br>
+                    <b>観測所名:</b> ${station.観測所名}<br>
+                    <b>ｶﾀｶﾅ名:</b> ${station.ｶﾀｶﾅ名}
+                </div>
+            `;
+
+            return `<div class="popup-content"><b>${station.局名}</b>${stationInfo}${tableHtml}</div>`;
+        }
+
+        $(document).ready(async () => {
+            try {
+                stationData = await loadCSV(stationDataUrl);
+                for (let i = 0; i < numDays; i++) {
+                    const dateStr = getDateString(i + 1); // 預設從昨天開始
+                    try {
+                        forecastData[dateStr] = await loadCSV(`${forecastDataUrl}${dateStr}.csv`);
+                    } catch (error) {
+                        console.warn(`Failed to load data for ${dateStr}`);
+                    }
+                }
+                $('#loading').hide();
+                $('#dateDisplay').text(getDateString(1)); // 預設顯示昨天的日期
+                addMarkers(1); // 明確設置初始的 dateIndex 為 1
+
+                $('#dateSlider').on('input', function () {
+                    const dateIndex = parseInt($(this).val()) + 1; // 添加 1 天
+                    $('#dateDisplay').text(getDateString(dateIndex)); // 顯示從昨天開始
+                    addMarkers(dateIndex);
+                });
+            } catch (error) {
+                console.error('Failed to load data', error);
+            }
+        });
+    </script>
+</body>
+
+</html>
