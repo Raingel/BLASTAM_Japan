@@ -268,17 +268,27 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import gzip
+import numpy as np
+import pandas as pd
+import gzip
+import os
+from datetime import datetime, timedelta
 
 def read_weather_data(station_id, year, month):
+    """
+    Reads the weather data for a given station and month.
+    """
     file_path = f'weather_data_repo/{station_id}/{year}-{month}.csv.gz'
     with gzip.open(file_path, 'rt', encoding='utf-8') as f:
-        data = pd.read_csv(f, skiprows=[1, 2, 3], parse_dates=['年月日時'])
+        data = pd.read_csv(f, skiprows=3, parse_dates=['年月日時'])
     return data
 
 def load_weather_data(station_id, start_date, end_date):
+    """
+    Loads weather data from the relevant months.
+    """
     data_frames = []
     current_date = start_date
-
     while current_date <= end_date:
         year = current_date.year
         month = current_date.month
@@ -288,14 +298,10 @@ def load_weather_data(station_id, start_date, end_date):
     weather_data = pd.concat(data_frames)
     return weather_data
 
-def get_five_day_data(weather_data, date):
-    end_date = pd.to_datetime(date)
-    start_date = end_date - pd.Timedelta(days=4)
-    mask = (weather_data['年月日時'] >= start_date) & (weather_data['年月日時'] <= end_date)
-    five_day_data = weather_data.loc[mask]
-    return five_day_data
-
 def prepare_model_input(five_day_data):
+    """
+    Prepares the input for the koshimizu_model from the five-day weather data.
+    """
     temp_5d = five_day_data['気温(℃)'].values
     wind_5d = five_day_data['風速(m/s)'].values
     rainfall_5d = five_day_data['降水量(mm)'].values
@@ -306,9 +312,9 @@ def calculate_blast_risk(station_id, date):
     try:
         date = pd.to_datetime(date)
         start_date = date - pd.Timedelta(days=4)
-        end_date = date
+        end_date = date.replace(hour=23)
         weather_data = load_weather_data(station_id, start_date, end_date)
-        five_day_data = get_five_day_data(weather_data, date)
+        five_day_data = weather_data[(weather_data['年月日時'] >= start_date) & (weather_data['年月日時'] <= end_date)]
 
         if len(five_day_data) != 120:
             raise ValueError("Insufficient data for five days")
@@ -326,17 +332,18 @@ def main():
     os.makedirs(result_dir, exist_ok=True)
 
     today = datetime.now().strftime('%Y-%m-%d')
-    result_file = os.path.join(result_dir, f"{today}.csv")
-
-    results = []
-    for station_id in os.listdir(stations_dir):
-        if os.path.isdir(os.path.join(stations_dir, station_id)):
-            result = calculate_blast_risk(station_id, today)
-            if result:
-                results.append([station_id, result['blast_score']])
-
-    result_df = pd.DataFrame(results, columns=['Station ID', 'Blast Score'])
-    result_df.to_csv(result_file, index=False)
+    dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(3)]
+    
+    for date in dates:
+        results = []
+        for station_id in os.listdir(stations_dir):
+            if os.path.isdir(os.path.join(stations_dir, station_id)):
+                result = calculate_blast_risk(station_id, date)
+                if result:
+                    results.append([station_id, result['blast_score']])
+        result_file = os.path.join(result_dir, f"{date}.csv")
+        result_df = pd.DataFrame(results, columns=['Station ID', 'Blast Score'])
+        result_df.to_csv(result_file, index=False)
 
 if __name__ == "__main__":
     main()
