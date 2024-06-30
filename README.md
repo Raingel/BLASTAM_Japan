@@ -1,4 +1,5 @@
 # BLASTAM Japan
+https://raingel.github.io/BLASTAM_Japan
 
 BLASTAM Japanは、BLASTAMモデルを使用して稲熱病（いもち病）のリスク評価を視覚的に表示するためのウェブベースのツールです。このツールは、リスク評価スコアを色分けされたマーカーで地図上に表示し、研究者や農家にとってわかりやすいビジュアル化を提供します。
 BLASTAM Japan is a web-based tool designed to visually present the risk assessment of rice blast disease (稲熱病、いもち病) using the BLASTAM model. The tool displays the risk assessment scores on a map with color-coded markers, providing an easy-to-understand visualization for researchers and farmers.
