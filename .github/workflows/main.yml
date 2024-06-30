@@ -16,7 +16,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Clone Weather Data Repository
-      run: git clone https://github.com/Raingel/AMeDAS_visualization.git
+      run: git clone https://github.com/Raingel/AMeDAS_visualization.git weather_data_repo
 
     - name: Install Python
       uses: actions/setup-python@v2
