@@ -263,11 +263,6 @@ def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
         blast_score=-1
 
     return leaf_wet_dict,{'start':start, 'end': end, 'wet_period_hrs':wet_period_hrs,'wet_avg_temp':temp_avg, 'blast_score':blast_score}
-import os
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import gzip
 import numpy as np
 import pandas as pd
 import gzip
@@ -278,7 +273,7 @@ def read_weather_data(station_id, year, month):
     """
     Reads the weather data for a given station and month.
     """
-    file_path = f'weather_data_repo/{station_id}/{year}-{month}.csv.gz'
+    file_path = f'weather_data_repo/weather_data/{station_id}/{year}-{month}.csv.gz'
     with gzip.open(file_path, 'rt', encoding='utf-8') as f:
         data = pd.read_csv(f, skiprows=3, parse_dates=['年月日時'])
     return data
@@ -327,7 +322,7 @@ def calculate_blast_risk(station_id, date):
         return None
 
 def main():
-    stations_dir = 'weather_data_repo'
+    stations_dir = 'weather_data_repo/weather_data'
     result_dir = 'data'
     os.makedirs(result_dir, exist_ok=True)
 
@@ -347,3 +342,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
