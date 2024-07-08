@@ -306,7 +306,7 @@ def prepare_model_input(five_day_data):
 def calculate_blast_risk(station_id, date):
     try:
         date = pd.to_datetime(date)
-        start_date = date - pd.Timedelta(days=4)
+        start_date = date - pd.Timedelta(days=5) #故意往前多載入一天，否則每月5日會出問題
         end_date = date.replace(hour=23)
         weather_data = load_weather_data(station_id, start_date, end_date)
         five_day_data = weather_data[(weather_data['年月日時'] >= start_date) & (weather_data['年月日時'] <= end_date)]
