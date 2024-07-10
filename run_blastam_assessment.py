@@ -330,7 +330,7 @@ def main():
 
     today = datetime.now().strftime('%Y-%m-%d')
     dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
-    DEBUG = True
+    DEBUG = False
     for date in dates:
         results = []
         for station_id in os.listdir(stations_dir):
