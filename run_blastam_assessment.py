@@ -306,12 +306,13 @@ def prepare_model_input(five_day_data):
 def calculate_blast_risk(station_id, date):
     try:
         date = pd.to_datetime(date)
-        start_date = date - pd.Timedelta(days=5)
+        start_date = date - pd.Timedelta(days=4)
         end_date = date.replace(hour=23)
         weather_data = load_weather_data(station_id, start_date, end_date)
         five_day_data = weather_data[(weather_data['年月日時'] >= start_date) & (weather_data['年月日時'] <= end_date)]
 
         if len(five_day_data) != 120:
+            pd.set_option('display.max_rows', None)
             print(five_day_data['年月日時'])
             raise ValueError(f"Data length error, {len(five_day_data)} provided")
 
@@ -329,7 +330,7 @@ def main():
 
     today = datetime.now().strftime('%Y-%m-%d')
     dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
-    
+    DEBUG = True
     for date in dates:
         results = []
         for station_id in os.listdir(stations_dir):
@@ -337,9 +338,13 @@ def main():
                 result = calculate_blast_risk(station_id, date)
                 if result:
                     results.append([station_id, result['blast_score']])
+            if DEBUG:
+                break
         result_file = os.path.join(result_dir, f"{date}.csv")
         result_df = pd.DataFrame(results, columns=['Station ID', 'Blast Score'])
         result_df.to_csv(result_file, index=False)
+        if DEBUG:
+            break
 
 if __name__ == "__main__":
     main()
