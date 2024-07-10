@@ -312,7 +312,7 @@ def calculate_blast_risk(station_id, date):
         five_day_data = weather_data[(weather_data['年月日時'] >= start_date) & (weather_data['年月日時'] <= end_date)]
 
         if len(five_day_data) != 120:
-            raise ValueError("Insufficient data for five days")
+            raise ValueError(f"Insufficient data for five days, {len(five_day_data)} provided")
 
         temp_5d, wind_5d, rainfall_5d, sun_shine_5d = prepare_model_input(five_day_data)
         leaf_wet_dict, results = koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d)
