@@ -312,7 +312,7 @@ def calculate_blast_risk(station_id, date):
         five_day_data = weather_data[(weather_data['年月日時'] >= start_date) & (weather_data['年月日時'] <= end_date)]
 
         if len(five_day_data) != 120:
-            print(weather_data['年月日時'])
+            print(five_day_data['年月日時'])
             raise ValueError(f"Data length error, {len(five_day_data)} provided")
 
         temp_5d, wind_5d, rainfall_5d, sun_shine_5d = prepare_model_input(five_day_data)
