@@ -1,3 +1,4 @@
+# %%
 import os
 import pandas as pd
 import numpy as np
@@ -308,13 +309,16 @@ def calculate_blast_risk(station_id, date):
         date = pd.to_datetime(date)
         start_date = date - pd.Timedelta(days=4)
         end_date = date.replace(hour=23)
-        weather_data = load_weather_data(station_id, start_date, end_date)
+        #因為該月的第一天的00時的資料會在上一個月的檔案內，所以如果start_date是該月的第一天，要把start_date往前推一天
+        first_day_shift = timedelta(days=1) if start_date.day == 1 else timedelta(days=0)
+        weather_data = load_weather_data(station_id, start_date - first_day_shift, end_date)
         five_day_data = weather_data[(weather_data['年月日時'] >= start_date) & (weather_data['年月日時'] <= end_date)]
 
         if len(five_day_data) != 120:
-            pd.set_option('display.max_rows', None)
-            print(five_day_data['年月日時'])
-            raise ValueError(f"Data length error, {len(five_day_data)} provided")
+            #print(five_day_data['年月日時'])
+            for d in five_day_data['年月日時']:
+                print(d)
+            raise ValueError(f"Data length error, For {start_date} to {end_date} at station {station_id}, {len(five_day_data)} provided")
 
         temp_5d, wind_5d, rainfall_5d, sun_shine_5d = prepare_model_input(five_day_data)
         leaf_wet_dict, results = koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d)
@@ -327,10 +331,11 @@ def main():
     stations_dir = 'weather_data_repo/weather_data'
     result_dir = 'data'
     os.makedirs(result_dir, exist_ok=True)
-
     today = datetime.now().strftime('%Y-%m-%d')
     dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(21)]
     DEBUG = False
+    if DEBUG:
+        dates = [(datetime.now() - timedelta(days=8) - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1)]
     for date in dates:
         results = []
         for station_id in os.listdir(stations_dir):
@@ -346,6 +351,9 @@ def main():
         if DEBUG:
             break
 
+# %%
 if __name__ == "__main__":
     main()
 
+
+# %%
