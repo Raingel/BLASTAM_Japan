@@ -321,7 +321,8 @@ def calculate_blast_risk(station_id, date):
         if len(five_day_data) != 120:
             #print(five_day_data['年月日時'])
             for d in five_day_data['年月日時']:
-                print(d)
+                #print(d)
+                pass
             raise ValueError(f"Data length error, For {start_date} to {end_date} at station {station_id}, {len(five_day_data)} provided")
         #如果temp_5d, wind_5d, rainfall_5d, sun_shine_5d中有任何直是nan的話，就不做計算
         if np.isnan(temp_5d).any() or np.isnan(wind_5d).any() or np.isnan(rainfall_5d).any() or np.isnan(sun_shine_5d).any():
@@ -340,7 +341,7 @@ def main():
     os.makedirs(result_dir, exist_ok=True)
     today = datetime.now().strftime('%Y-%m-%d')
     #Modify prediction length here
-    dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(2)]
+    dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(5)]
     DEBUG = False
     if DEBUG:
         dates = [(datetime.now() - timedelta(days=8) - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1)]
