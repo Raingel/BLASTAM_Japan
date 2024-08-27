@@ -251,8 +251,7 @@ def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
     blast_score=5
     if (wet_period_hrs<10): #「好適条件なし」とは、湿潤時間が 10 時間未満の場合である。
         blast_score=-1   
-    elif:    
-                    
+    else:            
         if (temp_avg>=15 and temp_avg<=25): #平均気温が 15～21℃であっても、その継続時間が第 1 表の湿潤時間より若干小さい場合である
             if (wet_period_hrs < temp_towetness_hour_lower_limit[round(temp_avg)]):
                 blast_score=4
