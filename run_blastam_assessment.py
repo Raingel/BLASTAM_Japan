@@ -323,8 +323,9 @@ def calculate_blast_risk(station_id, date):
             for d in five_day_data['年月日時']:
                 print(d)
             raise ValueError(f"Data length error, For {start_date} to {end_date} at station {station_id}, {len(five_day_data)} provided")
-        #如果temp_5d, wind_5d, rainfall_5d, sun_shine_5d中有任何值是nan的話，就不做計算
+        #如果temp_5d, wind_5d, rainfall_5d, sun_shine_5d中有任何直是nan的話，就不做計算
         if np.isnan(temp_5d).any() or np.isnan(wind_5d).any() or np.isnan(rainfall_5d).any() or np.isnan(sun_shine_5d).any():
+            print(f"{temp_5d}, {wind_5d}, {rainfall_5d}, {sun_shine_5d}")
             return None
         temp_5d, wind_5d, rainfall_5d, sun_shine_5d = prepare_model_input(five_day_data)
         leaf_wet_dict, results = koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d)
@@ -339,7 +340,7 @@ def main():
     os.makedirs(result_dir, exist_ok=True)
     today = datetime.now().strftime('%Y-%m-%d')
     #Modify prediction length here
-    dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(120)]
+    dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(3)]
     DEBUG = False
     if DEBUG:
         dates = [(datetime.now() - timedelta(days=8) - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1)]
