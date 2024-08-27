@@ -246,22 +246,27 @@ def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
     
     temp_towetness_hour_lower_limit={15:17, 16:15, 17:14, 18:13, 19:12, 20:11, 21:10, 22:10, 23:10, 24:10, 25:10}
     temp_5d_mean=temp_5d.mean()
-    blast_score=3
-
-
-
-    if (temp_avg<15 or temp_avg>25): #湿潤時間中の平均気温が 15～25℃の範囲内にないか
-        blast_score=blast_score-1
     
-    if (temp_5d_mean<20 or temp_5d_mean>25): #直前 5 日間の平均気温が 20℃以下または 25℃以上である場合
-        blast_score=blast_score-1
-    
-    if (temp_avg>=15 and temp_avg<=25): #平均気温が 15～21℃であっても、その継続時間が第 1 表の湿潤時間より若干小さい場合である
-        if (wet_period_hrs < temp_towetness_hour_lower_limit[round(temp_avg)]):
-            blast_score=blast_score-1
-
+    #Scoring formula modified on 24/08/27
+    blast_score=5
     if (wet_period_hrs<10): #「好適条件なし」とは、湿潤時間が 10 時間未満の場合である。
-        blast_score=-1
+        blast_score=-1   
+    elif:    
+                    
+        if (temp_avg>=15 and temp_avg<=25): #平均気温が 15～21℃であっても、その継続時間が第 1 表の湿潤時間より若干小さい場合である
+            if (wet_period_hrs < temp_towetness_hour_lower_limit[round(temp_avg)]):
+                blast_score=4
+                
+        if (temp_avg<15 or temp_avg>25): #湿潤時間中の平均気温が 15～25℃の範囲内にないか
+            blast_score=3
+        
+        if (temp_5d_mean>25): #直前 5 日間の平均気温が 20℃以下または 25℃以上である場合
+            blast_score=2
+        if (temp_5d_mean<20): #直前 5 日間の平均気温が 20℃以下または 25℃以上である場合
+            blast_score=1
+
+
+
 
     return leaf_wet_dict,{'start':start, 'end': end, 'wet_period_hrs':wet_period_hrs,'wet_avg_temp':temp_avg, 'blast_score':blast_score}
 import numpy as np
