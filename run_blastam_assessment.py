@@ -337,7 +337,8 @@ def main():
     result_dir = 'data'
     os.makedirs(result_dir, exist_ok=True)
     today = datetime.now().strftime('%Y-%m-%d')
-    dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(14)]
+    #Modify prediction length here
+    dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(120)]
     DEBUG = False
     if DEBUG:
         dates = [(datetime.now() - timedelta(days=8) - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1)]
