@@ -342,8 +342,8 @@ def main():
     day_back = 365*3
     end_point = 200
     #Modify prediction length here
-    # dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(day_back)]
-    DEBUG = True
+    dates = [(datetime.now() - timedelta(days=end_point)  - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(day_back)]
+    DEBUG = False
     if DEBUG:
         dates = [(datetime.now() - timedelta(days=end_point) - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(day_back)]
     for date in dates:
