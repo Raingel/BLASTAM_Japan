@@ -339,12 +339,13 @@ def main():
     stations_dir = 'weather_data_repo/weather_data'
     result_dir = 'data'
     os.makedirs(result_dir, exist_ok=True)
-    day_back = 365*10
+    day_back = 365*3
+    end_point = 200
     #Modify prediction length here
-    dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(day_back)]
-    DEBUG = False
+    # dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(day_back)]
+    DEBUG = True
     if DEBUG:
-        dates = [(datetime.now() - timedelta(days=8) - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1)]
+        dates = [(datetime.now() - timedelta(days=end_point) - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(day_back)]
     for date in dates:
         results = []
         for station_id in os.listdir(stations_dir):
