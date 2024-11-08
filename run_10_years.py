@@ -340,7 +340,7 @@ def main():
     result_dir = 'data'
     os.makedirs(result_dir, exist_ok=True)
     day_back = 365*2
-    end_point = 365*3-1
+    end_point = 365*5-1
     #Modify prediction length here
     dates = [(datetime.now() - timedelta(days=end_point)  - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(day_back)]
     DEBUG = False
