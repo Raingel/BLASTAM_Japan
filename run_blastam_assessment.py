@@ -259,14 +259,14 @@ def calculate_blast_risk(station_id, date, base_dir, debug=False):
         return None
 # %%
 def main():
-    #base_dir = r"D:\AMeDAS_visualization\weather_data"
+    #base_dir = r"../AMeDAS_visualization/weather_data"
     base_dir = r"./weather_data_repo/weather_data"
     result_dir = 'data'
     os.makedirs(result_dir, exist_ok=True)
     
     dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)]
     global DEBUG
-    DEBUG = False
+    DEBUG = True
     if DEBUG:
         dates = [(datetime.now() - timedelta(days=8) - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1)]
     
