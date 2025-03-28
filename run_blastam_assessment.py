@@ -266,7 +266,7 @@ def main():
     
     dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)]
     global DEBUG
-    DEBUG = True
+    DEBUG = False
     if DEBUG:
         dates = [(datetime.now() - timedelta(days=8) - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1)]
     
