@@ -224,7 +224,7 @@
                         fillColor: color,
                         fillOpacity: 0.8,
                         radius: 8,
-                        weight: 0 // 沒有外框
+                        weight: 0 // 無外框
                     }).addTo(map);
 
                     marker.bindPopup(createPopupContent(station, record['Station ID']));
@@ -288,22 +288,41 @@
 
         $(document).ready(async () => {
             try {
+                // 載入氣象站資料
                 stationData = await loadCSV(stationDataUrl);
+                // 載入預報資料時顯示進度
                 for (let i = 0; i < numDays; i++) {
-                    const dateStr = getDateString(i + 1); // 預設從昨天開始
+                    const dateStr = getDateString(i + 1); // 從昨天開始 (i=0 表示昨天)
+                    $('#loading').text(`載入進度: ${i + 1}/${numDays} - 正在載入 ${dateStr}`);
                     try {
                         forecastData[dateStr] = await loadCSV(`${forecastDataUrl}${dateStr}.csv`);
                     } catch (error) {
                         console.warn(`Failed to load data for ${dateStr}`);
                     }
                 }
+                // 找出最新有資料的日期（從昨天開始，依序往前找）
+                let defaultDateIndex = 1;
+                while (
+                    defaultDateIndex <= numDays &&
+                    (
+                        !forecastData[getDateString(defaultDateIndex)] ||
+                        forecastData[getDateString(defaultDateIndex)].length === 0
+                    )
+                ) {
+                    defaultDateIndex++;
+                }
+                if (defaultDateIndex > numDays) {
+                    defaultDateIndex = 1; // 若全部都無資料則預設為昨天
+                }
                 $('#loading').hide();
-                $('#dateDisplay').text(getDateString(1)); // 預設顯示昨天の日期
-                addMarkers(1); // 明確設置初始的 dateIndex 為 1
+                // 設定預設日期、slider 與標記
+                $('#dateDisplay').text(getDateString(defaultDateIndex));
+                $('#dateSlider').val(defaultDateIndex - 1);
+                addMarkers(defaultDateIndex);
 
                 $('#dateSlider').on('input', function () {
-                    const dateIndex = parseInt($(this).val()) + 1; // 添加 1 天
-                    $('#dateDisplay').text(getDateString(dateIndex)); // 顯示從昨天開始
+                    const dateIndex = parseInt($(this).val()) + 1; // slider 值 + 1 天
+                    $('#dateDisplay').text(getDateString(dateIndex));
                     addMarkers(dateIndex);
                 });
             } catch (error) {
