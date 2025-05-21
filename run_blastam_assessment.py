@@ -74,9 +74,9 @@ def read_weather_data(base_dir, station_id, year, month):
         return None
 
     # 清理與轉換
-df = df.dropna(subset=["年月日時"])
-df["年月日時"] = df["年月日時"].astype(str).apply(parse_datetime_custom)
-    
+    df = df.dropna(subset=["年月日時"])
+    df["年月日時"] = df["年月日時"].astype(str).apply(parse_datetime_custom)
+
     logger.info(f"讀取完畢 {file_path}, 資料量: {df.shape}")
     return df
 
@@ -117,7 +117,6 @@ def prepare_model_input(df):
     return arrays
 
 # 假設 koshimizu_model 定義保持不變
-
 
 def calculate_blast_risk(station_id, date_str, base_dir):
     """
