@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 # 全域 DEBUG 參數
 DEBUG = False
 
+# 儲存嘗試解碼的編碼清單
+ENCODINGS_TO_TRY = ['cp932', 'utf-8', 'shift_jis', 'euc_jp']
+
 
 def parse_datetime_custom(x):
     """
@@ -39,25 +42,40 @@ def parse_datetime_custom(x):
 def read_weather_data(base_dir, station_id, year, month):
     """
     讀取單月氣象資料，自動定位 header。
-    若找不到 header 或解析失敗，記錄錯誤及前五行。
+    先以 gzip 讀二進位，嘗試多種編碼解碼，
+    記錄最先成功的編碼。
+    若解析失敗，記錄錯誤及前五行。
     """
     file_path = os.path.join(base_dir, station_id, f"{year}-{month}.csv.gz")
     logger.info(f"嘗試讀取檔案: {file_path}")
     try:
-        with gzip.open(file_path, 'rt', encoding='utf-8') as f:
-            lines = f.readlines()
+        raw = gzip.open(file_path, 'rb').read()
     except Exception as e:
         logger.error(f"無法開啟檔案 {file_path}: {e}")
         return None
 
+    text = None
+    for enc in ENCODINGS_TO_TRY:
+        try:
+            text = raw.decode(enc)
+            logger.info(f"檔案 {file_path} 解碼成功，使用編碼：{enc}")
+            break
+        except Exception:
+            logger.debug(f"編碼 {enc} 解碼失敗 {file_path}")
+    if text is None:
+        # 全部嘗試失敗，再用 cp932 忽略錯誤
+        text = raw.decode('cp932', errors='ignore')
+        logger.warning(f"所有編碼嘗試失敗，強制使用 cp932 (忽略錯誤)：{file_path}")
+
+    lines = text.splitlines(keepends=True)
+
     # 定位 header
     header_idx = None
-    for idx, line in enumerate(lines[:50]):  # 只搜尋前50行
+    for idx, line in enumerate(lines[:50]):
         if "年月日時" in line:
             header_idx = idx
             logger.debug(f"{file_path} Header 在第 {idx} 行: {line.strip()}")
             break
-
     if header_idx is None:
         logger.error(f"找不到 header '年月日時' in {file_path}，前五行如下:")
         for ln in lines[:5]:
@@ -68,7 +86,7 @@ def read_weather_data(base_dir, station_id, year, month):
     from io import StringIO
     csv_text = "".join(lines[header_idx:])
     try:
-        df = pd.read_csv(StringIO(csv_text), encoding='utf-8')
+        df = pd.read_csv(StringIO(csv_text))
     except Exception as e:
         logger.error(f"pd.read_csv 失敗 {file_path}: {e}\n前五行:\n" + "\n".join(lines[header_idx:header_idx+5]))
         return None
@@ -117,6 +135,7 @@ def prepare_model_input(df):
     return arrays
 
 # 假設 koshimizu_model 定義保持不變
+
 
 def calculate_blast_risk(station_id, date_str, base_dir):
     """
