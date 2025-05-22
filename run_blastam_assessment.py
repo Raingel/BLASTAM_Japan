@@ -63,7 +63,6 @@ def read_weather_data(base_dir, station_id, year, month):
         except Exception:
             logger.debug(f"編碼 {enc} 解碼失敗 {file_path}")
     if text is None:
-        # 全部嘗試失敗，再用 cp932 忽略錯誤
         text = raw.decode('cp932', errors='ignore')
         logger.warning(f"所有編碼嘗試失敗，強制使用 cp932 (忽略錯誤)：{file_path}")
 
@@ -91,10 +90,8 @@ def read_weather_data(base_dir, station_id, year, month):
         logger.error(f"pd.read_csv 失敗 {file_path}: {e}\n前五行:\n" + "\n".join(lines[header_idx:header_idx+5]))
         return None
 
-    # 清理與轉換
     df = df.dropna(subset=["年月日時"])
     df["年月日時"] = df["年月日時"].astype(str).apply(parse_datetime_custom)
-
     logger.info(f"讀取完畢 {file_path}, 資料量: {df.shape}")
     return df
 
@@ -122,9 +119,6 @@ def load_weather_data(base_dir, station_id, start_date, end_date):
 
 
 def prepare_model_input(df):
-    """
-    擷取溫度、風速、降雨、日照等欄位，轉成 numpy。
-    """
     cols = ['気温(℃)', '風速(m/s)', '降水量(mm)', '日照時間(時間)']
     arrays = []
     for col in cols:
@@ -134,13 +128,131 @@ def prepare_model_input(df):
             logger.debug(f"{col} NaN 數量: {np.isnan(arr.values).sum()}")
     return arrays
 
-# 假設 koshimizu_model 定義保持不變
+# 假設 koshimizu_model 已定義 elsewhere
+def koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d):
+    """
+    模型邏輯：計算葉面濕潤狀態及病害風險分數（公式略）。
+    此處假設輸入皆為連續 5 日（120 小時）的資料。
+    """
+    rainfall_1600_0700 = rainfall_5d[88:104]
+    sun_shine_1600_0700 = sun_shine_5d[88:104]
+    wind_1600_0700 = wind_5d[88:104]
+    hour = 16
+    leaf_wet = False
+    leaf_wet_dict = {}
+    accumulate_sunshine = 0
+    key = 0
+    for rainfall, sunshine, wind in zip(rainfall_1600_0700, sun_shine_1600_0700, wind_1600_0700):
+        if key < 15:
+            if rainfall_1600_0700[key+1] > 0:
+                leaf_wet = True
+        if rainfall_1600_0700[key] > 0 and sun_shine_1600_0700[key] == 0.1:
+            sun_shine_1600_0700[key] = 0
+        accumulate_sunshine += sun_shine_1600_0700[key]
+        if hour == 0:
+            accumulate_sunshine = 0
+        if accumulate_sunshine > 0.2:
+            leaf_wet = False
+        if wind >= 4:
+            leaf_wet = False
+        if key > 1 and key < 15:
+            if ((wind_1600_0700[key-1] >= 3 and wind_1600_0700[key] >= 3 and wind_1600_0700[key+1] >= 3)
+                and (hour >= 16 or hour <= 4)):
+                leaf_wet = False 
+            if (wind_1600_0700[key+1] >= 4) and (hour >= 16 or hour <= 4):
+                leaf_wet = False 
+        if (hour >= 4 or hour <= 7) and ((rainfall == 0 and wind >= 3) or (rainfall > 0 and wind >= 4)):
+            leaf_wet = False   
+        leaf_wet_dict[hour] = leaf_wet
+        hour = (hour + 1) % 24
+        key += 1
+
+    rainfall_0600_1600 = rainfall_5d[102:113]
+    sun_shine_0600_1600 = sun_shine_5d[102:113]
+    wind_0600_1600 = wind_5d[102:113]
+    hour = 6
+    key = 102
+    for h in range(8, 16):
+        leaf_wet_dict[h] = False
+    for rainfall, sunshine, wind in zip(rainfall_0600_1600, sun_shine_0600_1600, wind_0600_1600):
+        if hour > 7 and hour < 16:
+            if rainfall > 0:
+                if wind_5d[key-3] < 3 and sun_shine_5d[key-3] <= 0.1 and hour-3 > 7:
+                    leaf_wet_dict[hour-3] = True    
+                if wind_5d[key-2] < 3 and sun_shine_5d[key-2] <= 0.1 and hour-2 > 7:
+                    leaf_wet_dict[hour-2] = True           
+                if wind_5d[key-1] < 3 and sun_shine_5d[key-1] <= 0.1 and hour-1 > 7:
+                    leaf_wet_dict[hour-1] = True           
+                if wind_5d[key-0] < 3 and sun_shine_5d[key-0] <= 0.1:
+                    leaf_wet_dict[hour-0] = True      
+                if wind_5d[key+1] < 3 and sun_shine_5d[key+1] <= 0.1 and hour+1 < 16:
+                    leaf_wet_dict[hour+1] = True      
+                if wind_5d[key+2] < 3 and sun_shine_5d[key+2] <= 0.1 and hour+2 < 16:
+                    leaf_wet_dict[hour+2] = True      
+                if wind_5d[key+3] < 3 and sun_shine_5d[key+3] <= 0.1 and hour+3 < 16:
+                    leaf_wet_dict[hour+3] = True
+        hour = (hour + 1) % 24
+        key += 1
+
+    hour = 6
+    key = 102
+    for rainfall, sunshine, wind in zip(rainfall_0600_1600, sun_shine_0600_1600, wind_0600_1600):
+        if hour > 7 and hour < 16:
+            if leaf_wet_dict[hour] == False:
+                if (leaf_wet_dict[hour-1] == True and leaf_wet_dict[hour+1] == True 
+                    and sunshine <= 0.1 and wind <= 3):
+                    leaf_wet_dict[hour] = True
+        hour = (hour + 1) % 24
+        key += 1
+
+    wind_1600_1500 = wind_5d[88:112]
+    rainfall_1600_1500 = rainfall_5d[88:112]
+    for hr in range(16, 40):   
+        if rainfall_1600_1500[hr-16] > 4:
+            for ineffective_hour in range(hr-9, hr+10):
+                if ineffective_hour >= 16 and ineffective_hour <= 40:
+                    hour_now = ineffective_hour % 24
+                    leaf_wet_dict[hour_now] = -2
+
+    start = False
+    end = False
+    wet_period_hrs = 0
+    temp_avg = 0
+    temp_1600_1500 = temp_5d[88:112]
+    for hr in range(16, 40):
+        hour_now = hr % 24
+        if leaf_wet_dict.get(hour_now) == True:
+            if not start:
+                start = hour_now
+            end = hour_now
+            wet_period_hrs += 1
+            temp_avg += temp_1600_1500[hr-16]
+        elif start:
+            break
+    if wet_period_hrs != 0:
+        temp_avg = temp_avg / wet_period_hrs
+
+    temp_towetness_hour_lower_limit = {15:17, 16:15, 17:14, 18:13, 19:12, 20:11, 21:10, 22:10, 23:10, 24:10, 25:10}
+    temp_5d_mean = temp_5d.mean()
+    blast_score = 5
+    if wet_period_hrs < 10:
+        blast_score = -1   
+    else:            
+        if 15 <= temp_avg <= 25:
+            if wet_period_hrs < temp_towetness_hour_lower_limit[round(temp_avg)]:
+                blast_score = 4
+        if temp_avg < 15 or temp_avg > 25:
+            blast_score = 3
+        if temp_5d_mean > 25:
+            blast_score = 2
+        if temp_5d_mean < 20:
+            blast_score = 1
+
+    return leaf_wet_dict, {'start': start, 'end': end, 'wet_period_hrs': wet_period_hrs,
+                             'wet_avg_temp': temp_avg, 'blast_score': blast_score}
 
 
 def calculate_blast_risk(station_id, date_str, base_dir):
-    """
-    計算指定日期的 5 天風險，回傳結果 dict 或 None。
-    """
     try:
         date = pd.to_datetime(date_str)
         start = date - timedelta(days=4)
@@ -150,19 +262,17 @@ def calculate_blast_risk(station_id, date_str, base_dir):
         if df is None:
             return None
 
-        mask = (df['年月日時'] >= start) & (df['年月日時'] <= end)
-        sub = df.loc[mask]
+        sub = df[(df['年月日時'] >= start) & (df['年月日時'] <= end)]
         if sub.shape[0] != 120:
-            logger.error(f"{station_id} {date_str} 資料長度 {sub.shape[0]} !=120，前五筆: {sub.head().to_dict('records')}")
+            logger.error(f"{station_id} {date_str} 資料長度 {sub.shape[0]} !=120")
             return None
 
         temp, wind, rain, sun = prepare_model_input(sub)
         if any(np.isnan(arr).any() for arr in [temp, wind, rain, sun]):
-            logger.error(f"{station_id} {date_str} 模型輸入含 NaN，前五筆: temp={temp[:5]}, wind={wind[:5]}")
+            logger.error(f"{station_id} {date_str} 模型輸入含 NaN")
             return None
 
         leaf_wet, res = koshimizu_model(temp, wind, rain, sun)
-        logger.info(f"{station_id} {date_str} blast_score={res['blast_score']}")
         return res
     except Exception as e:
         logger.error(f"處理 {station_id} {date_str} 時發生例外: {e}")
@@ -176,8 +286,9 @@ def main():
 
     dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)]
     for date in dates:
+        logger.info(f"開始評估: {date}")
         results = []
-        for station in os.listdir(base_dir):
+        for station in sorted(os.listdir(base_dir)):
             path = os.path.join(base_dir, station)
             if not os.path.isdir(path):
                 continue
@@ -187,7 +298,11 @@ def main():
         out = pd.DataFrame(results, columns=['Station', 'BlastScore'])
         fn = os.path.join(result_dir, f"{date}.csv")
         out.to_csv(fn, index=False)
-        logger.info(f"已寫入結果: {fn}")
+
+        if len(results) > 0:
+            logger.info(f"{date} 評估成功 {len(results)} 筆資料，已寫入: {fn}")
+        else:
+            logger.warning(f"{date} 無資料通過評估，輸出檔案為空: {fn}")
 
 if __name__ == '__main__':
     main()
