@@ -308,7 +308,7 @@ def main():
             res = calculate_blast_risk(station, date, base_dir)
             if res is not None:
                 results.append([station, res['blast_score']])
-        out = pd.DataFrame(results, columns=['Station', 'BlastScore'])
+        out = pd.DataFrame(results, columns=['Station ID', 'Blast Score'])
         fn = os.path.join(result_dir, f"{date}.csv")
         out.to_csv(fn, index=False)
         logger.info(f"{date} 完成，寫入 {len(results)} 筆")
