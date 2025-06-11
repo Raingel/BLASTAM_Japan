@@ -4,161 +4,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>いもち病のBLASTAM感染好適条件リスクマップ</title>
-    <meta name="description" content="いもちのBLASTAMリスク評価を視覚的に表示するマップ。各地点のリスク評価スコアをカラーコードで示します。BLASTAMブラスタム">
-    <meta name="keywords" content="稲熱病, BLASTAM,感染好適条件,リスク評価, 気象データ, アメダス, リスクマップ, BLASTAMブラスタム, いもち病, 発生, 予測">
+    <title>いもち病のBLASTAM感染好適条件リスクマップ / BLASTAM Risk Map for Rice Blast Disease</title>
+    <meta name="description" content="いもち病のBLASTAM感染好適条件リスクマップ（Rice blast BLASTAM Infection Favorable Conditions Risk Map） - 各地点のリスク評価スコアをカラーコードで示す地図 / A visual map showing BLASTAM risk assessment scores with color coding for each location, using weather data from AMeDAS for accurate forecasts and predictions.">
+    <meta name="keywords" content="稲熱病, rice blast disease, いもち病, BLASTAM, 感染好適条件, infection favorable conditions, リスクマップ, risk map, 予測, forecast, 予報, prediction, 気象データ, weather data, AMeDAS">
     <meta name="robots" content="index, follow">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
         body,
-        html {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-        }
-
-        #map {
-            height: 90%;
-        }
-
+        html { height: 100%; margin: 0; padding: 0; }
+        #map { height: 85%; }
         #loading {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 24px;
-            z-index: 1000;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); color: white;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 24px; z-index: 1000;
         }
-
         #controls {
-            height: 10%;
-            display: flex;
-            align-items: center;
-            background-color: #f1f1f1;
+            height: 15%; display: flex; align-items: center;
+            background-color: #f9f9f9; padding: 0 10px;
         }
-
         #info {
-            display: none;
-            position: fixed;
-            top: 10%;
-            left: 10%;
-            width: 80%;
-            height: 80%;
-            background-color: white;
-            padding: 20px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-            overflow-y: auto;
-            z-index: 1001;
+            display: none; position: fixed; top: 10%; left: 10%; width: 80%; height: 80%;
+            background-color: white; padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); overflow-y: auto; z-index: 1001;
         }
-
         #infoButton {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            font-size: 24px;
-            text-align: center;
-            line-height: 40px;
-            cursor: pointer;
-            margin-left: 10px;
+            background-color: #007bff; color: white; border: none;
+            border-radius: 50%; width: 40px; height: 40px;
+            font-size: 24px; text-align: center; line-height: 40px;
+            cursor: pointer; margin-right: 10px;
         }
-
         #dateSliderContainer {
-            width: 90%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            display: flex; align-items: center; width: 100%;
         }
-
-        #dateSlider {
-            width: 80%;
-        }
-
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-top: 10px;
-        }
-
-        th,
-        td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: center;
-        }
-
-        th {
-            background-color: #f2f2f2;
-        }
-
-        .low-risk {
-            background-color: green;
-            color: white;
-        }
-
-        .medium-risk {
-            background-color: yellow;
-            color: black;
-        }
-
-        .high-risk {
-            background-color: red;
-            color: white;
-        }
-
-        .popup-content {
-            max-height: 70vh;
-            max-width: 50vw;
-            overflow-y: auto;
-        }
-
-        .station-info {
-            margin-top: 10px;
-        }
+        #dateSliderContainer label { margin-right: 10px; font-weight: bold; }
+        #dateSlider { flex: 1; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .low-risk { background-color: green; color: white; }
+        .medium-risk { background-color: yellow; color: black; }
+        .high-risk { background-color: red; color: white; }
+        .popup-content { max-height: 70vh; max-width: 50vw; overflow-y: auto; }
+        .station-info { margin-top: 10px; }
     </style>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-N4LXSF0TQD"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-    
+      function gtag(){dataLayer.push(arguments);} gtag('js', new Date());
       gtag('config', 'G-N4LXSF0TQD');
     </script>
     <meta name="google-site-verification" content="vkdzg09wW4DkzlFNnKNtFUWbnsdc1RN69s0pgr5PWT4" />
 </head>
+
 <body>
-    <div id="loading">データを読み込んでいます。お待ちください...</div>
+    <div id="loading">データを読み込んでいます。お待ちください... / Loading data, please wait...</div>
+    <h1 style="text-align:center; padding: 10px;">BLASTAM リスクマップ / BLASTAM Risk Map for Rice Blast</h1>
     <div id="map"></div>
     <div id="controls">
-        <button id="infoButton">?</button>
+        <button id="infoButton" title="情報 / Info">?</button>
         <div id="dateSliderContainer">
+            <label for="modelSelect">モデル選択 / Model:</label>
             <select id="modelSelect">
                 <option value="blastam">BLASTAM</option>
-                <!-- ここに他のモデルオプションを追加できます -->
             </select>
+            <label for="dateSlider">日付/Date:</label>
             <input type="range" id="dateSlider" min="0" max="59" value="0">
-            <span id="dateDisplay"></span>
+            <span id="dateDisplay" style="margin-left:10px;"></span>
         </div>
     </div>
     <div id="info">
-        <p>このウェブページのリポジトリは<a href="https://github.com/Raingel/BLASTAM_Japan" target="_blank">https://github.com/Raingel/BLASTAM_Japan</a>にあります。</p>
-        <p>計算公式は次のリファレンスから引用されています: 越水幸男. 1988. 「アメダス資料による葉いもち発生予察法」。<a href="https://agriknowledge.affrc.go.jp/RN/2030411788" target="_blank">https://agriknowledge.affrc.go.jp/RN/2030411788</a></p>
-        <p>実装は <a href="https://github.com/Raingel/BLASTAM" target="_blank">https://github.com/Raingel/BLASTAM</a> によるものです。</p>
-        <p>赤色は「好適条件」を示します。</p>
-        <p>黄色は「準好適条件」を示します。</p>
-        <p>緑色は「非好適条件」を示します。</p>
-        <p>気象データは <a href="https://www.data.jma.go.jp/gmd/risk/obsdl/" target="_blank">https://www.data.jma.go.jp/gmd/risk/obsdl/ Amedas</a> から取得しています。</p>
-        <button onclick="closeInfo()">閉じる</button>
+        <p>このウェブページのリポジトリは / Repository: <a href="https://github.com/Raingel/BLASTAM_Japan" target="_blank">https://github.com/Raingel/BLASTAM_Japan</a></p>
+        <p>計算公式は以下のリファレンスを引用 / Calculation references: 越水幸男. 1988. 「アメダス資料による葉いもち発生予察法」 - <a href="https://agriknowledge.affrc.go.jp/RN/2030411788" target="_blank">https://agriknowledge.affrc.go.jp/RN/2030411788</a></p>
+        <p>実装ソースコード / Implementation: <a href="https://github.com/Raingel/BLASTAM" target="_blank">https://github.com/Raingel/BLASTAM</a></p>
+        <p><span style="color:red;">赤色 / Red</span> は「好適条件 / Favorable conditions」を示します。</p>
+        <p><span style="color:yellow;">黄色 / Yellow</span> は「準好適条件 / Moderate conditions」を示します。</p>
+        <p><span style="color:green;">緑色 / Green</span> は「非好適条件 / Non-favorable conditions」を示します。</p>
+        <p>気象データは AMeDAS から取得 / Weather data source: <a href="https://www.data.jma.go.jp/gmd/risk/obsdl/" target="_blank">https://www.data.jma.go.jp/gmd/risk/obsdl/</a></p>
+        <button onclick="closeInfo()">閉じる / Close</button>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
@@ -166,168 +90,78 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-csv/0.8.9/jquery.csv.min.js"></script>
     <script>
         const map = L.map('map').setView([39.7036, 141.1527], 6);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 18,
-        }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
 
         const stationDataUrl = 'https://raw.githubusercontent.com/Raingel/AMeDAS_visualization/main/stations/weather_stations.csv';
         const forecastDataUrl = 'https://raw.githubusercontent.com/Raingel/BLASTAM_Japan/main/data/';
-
-        let stationData = [];
-        let forecastData = [];
-        const markers = [];
+        let stationData = [], forecastData = {}, markers = [];
         const numDays = 60;
 
         function loadCSV(url) {
             return new Promise((resolve, reject) => {
-                $.ajax({
-                    url,
-                    dataType: 'text',
-                }).done((data) => {
-                    const parsedData = $.csv.toObjects(data);
-                    resolve(parsedData);
-                }).fail((error) => {
-                    reject(error);
-                });
+                $.ajax({ url, dataType: 'text' })
+                    .done(data => resolve($.csv.toObjects(data)))
+                    .fail(err => reject(err));
             });
         }
 
         function getDateString(daysAgo) {
-            const date = new Date();
-            date.setDate(date.getDate() - daysAgo);
+            const date = new Date(); date.setDate(date.getDate() - daysAgo);
             return date.toISOString().split('T')[0];
         }
 
-        function addMarkers(dateIndex) {
-            markers.forEach(marker => map.removeLayer(marker));
-            markers.length = 0;
-
-            const dateStr = getDateString(dateIndex);
-            const forecast = forecastData[dateStr];
-
-            if (!forecast) return;
-
-            forecast.forEach(record => {
-                const station = stationData.find(s => s.局ID === record['Station ID']);
-                if (station) {
-                    let color;
-                    if (record['Blast Score'] == -1) {
-                        color = 'green';
-                    } else if (record['Blast Score'] == 5) {
-                        color = 'red';
-                    } else {
-                        color = 'yellow';
-                    }
-
-                    const marker = L.circleMarker([station.緯度, station.経度], {
-                        color: color,
-                        fillColor: color,
-                        fillOpacity: 0.8,
-                        radius: 8,
-                        weight: 0 // 無外框
-                    }).addTo(map);
-
-                    marker.bindPopup(createPopupContent(station, record['Station ID']));
-                    markers.push(marker);
-                }
+        function addMarkers(index) {
+            markers.forEach(m => map.removeLayer(m)); markers = [];
+            const date = getDateString(index);
+            const list = forecastData[date] || [];
+            list.forEach(r => {
+                const st = stationData.find(s => s.局ID === r['Station ID']);
+                if (!st) return;
+                let col = r['Blast Score'] == -1 ? 'green' : (r['Blast Score'] == 5 ? 'red' : 'yellow');
+                const marker = L.circleMarker([st.緯度, st.経度], { color: col, fillColor: col, fillOpacity: 0.8, radius: 8, weight: 0 }).addTo(map);
+                marker.bindPopup(createPopupContent(st, r['Station ID']));
+                markers.push(marker);
             });
         }
 
-        function createPopupContent(station, stationId) {
-            let tableHtml = '<table><tr><th>日付</th>';
-            for (let i = 0; i < numDays; i++) {
-                tableHtml += `<th>${getDateString(i + 1)}</th>`;
+        function createPopupContent(st, id) {
+            let html = `<div class="popup-content"><b>${st.局名}</b>`;
+            html += `<div class="station-info">` +
+                `<b>局ID / Station ID:</b> ${st.局ID}<br>` +
+                `<b>都府県振興局:</b> ${st.都府県振興局}<br>` +
+                `</div>`;
+            html += '<table><tr><th>Date</th>';
+            for (let i = 1; i <= numDays; i++) html += `<th>${getDateString(i)}</th>`;
+            html += '</tr><tr><td>Score</td>';
+            for (let i = 1; i <= numDays; i++) {
+                const d = getDateString(i);
+                const rec = (forecastData[d]||[]).find(x => x['Station ID'] === id) || {};
+                const score = rec['Blast Score'] ?? '';
+                const cls = score == -1 ? 'low-risk' : (score == 5 ? 'high-risk' : 'medium-risk');
+                html += `<td class="${cls}">${score}</td>`;
             }
-            tableHtml += '</tr><tr><td>Blast Score</td>';
-            for (let i = 0; i < numDays; i++) {
-                const dateStr = getDateString(i + 1);
-                const forecast = forecastData[dateStr];
-                let riskClass = '';
-                let blastScore = '';
-                if (forecast) {
-                    const record = forecast.find(r => r['Station ID'] === stationId);
-                    if (record) {
-                        blastScore = record['Blast Score'];
-                        if (record['Blast Score'] == -1) {
-                            riskClass = 'low-risk';
-                        } else if (record['Blast Score'] == 5) {
-                            riskClass = 'high-risk';
-                        } else {
-                            riskClass = 'medium-risk';
-                        }
-                    }
-                }
-                tableHtml += `<td class="${riskClass}">${blastScore}</td>`;
-            }
-            tableHtml += '</tr></table>';
-
-            const stationInfo = `
-                <div class="station-info">
-                    <b>局ID:</b> ${station.局ID}<br>
-                    <b>局名:</b> ${station.局名}<br>
-                    <b>緯度:</b> ${station.緯度}<br>
-                    <b>経度:</b> ${station.経度}<br>
-                    <b>都府県振興局:</b> ${station.都府県振興局}<br>
-                    <b>観測所番号:</b> ${station.観測所番号}<br>
-                    <b>種類:</b> ${station.種類}<br>
-                    <b>観測所名:</b> ${station.観測所名}<br>
-                    <b>ｶﾀｶﾅ名:</b> ${station.ｶﾀｶﾅ名}
-                </div>
-            `;
-
-            return `<div class="popup-content"><b>${station.局名}</b>${stationInfo}${tableHtml}</div>`;
+            html += '</tr></table></div>';
+            return html;
         }
 
-        function closeInfo() {
-            document.getElementById('info').style.display = 'none';
-        }
+        function closeInfo() { document.getElementById('info').style.display = 'none'; }
 
         document.getElementById('infoButton').addEventListener('click', () => {
             document.getElementById('info').style.display = 'block';
         });
 
-        $(document).ready(async () => {
+        $(async () => {
             try {
-                // 載入氣象站資料
                 stationData = await loadCSV(stationDataUrl);
-                // 載入預報資料時顯示進度
-                for (let i = 0; i < numDays; i++) {
-                    const dateStr = getDateString(i + 1); // 從昨天開始 (i=0 表示昨天)
-                    $('#loading').text(`載入進度: ${i + 1}/${numDays} - 正在載入 ${dateStr}`);
-                    try {
-                        forecastData[dateStr] = await loadCSV(`${forecastDataUrl}${dateStr}.csv`);
-                    } catch (error) {
-                        console.warn(`Failed to load data for ${dateStr}`);
-                    }
-                }
-                // 找出最新有資料的日期（從昨天開始，依序往前找）
-                let defaultDateIndex = 1;
-                while (
-                    defaultDateIndex <= numDays &&
-                    (
-                        !forecastData[getDateString(defaultDateIndex)] ||
-                        forecastData[getDateString(defaultDateIndex)].length === 0
-                    )
-                ) {
-                    defaultDateIndex++;
-                }
-                if (defaultDateIndex > numDays) {
-                    defaultDateIndex = 1; // 若全部都無資料則預設為昨天
+                for (let i = 1; i <= numDays; i++) {
+                    $('#loading').text(`読み込み中 ${i}/${numDays} - ${getDateString(i)} / Loading ${getDateString(i)}`);
+                    try { forecastData[getDateString(i)] = await loadCSV(`${forecastDataUrl}${getDateString(i)}.csv`); } catch {};
                 }
                 $('#loading').hide();
-                // 設定預設日期、slider 與標記
-                $('#dateDisplay').text(getDateString(defaultDateIndex));
-                $('#dateSlider').val(defaultDateIndex - 1);
-                addMarkers(defaultDateIndex);
-
-                $('#dateSlider').on('input', function () {
-                    const dateIndex = parseInt($(this).val()) + 1; // slider 值 + 1 天
-                    $('#dateDisplay').text(getDateString(dateIndex));
-                    addMarkers(dateIndex);
-                });
-            } catch (error) {
-                console.error('データの読み込みに失敗しました', error);
-            }
+                let idx=1; while(idx<=numDays && (!(forecastData[getDateString(idx)]||[]).length)) idx++;
+                $('#dateSlider').val(idx-1); $('#dateDisplay').text(getDateString(idx)); addMarkers(idx);
+                $('#dateSlider').on('input', function(){ const v=+this.value+1; $('#dateDisplay').text(getDateString(v)); addMarkers(v); });
+            } catch(e) { console.error('Data load error', e); }
         });
     </script>
 </body>
