@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import logging
 import gzip
+import math
 from datetime import datetime, timedelta
 
 # logging 設定
@@ -102,19 +103,48 @@ def load_weather_data(base_dir, station_id, start_date, end_date):
     return combined
 
 
+MAX_INTERPOLATION_GAP_HOURS = {'気温(℃)': 3, '風速(m/s)': 3, '日照時間(時間)': 2}
+
+
+def interpolate_short_internal_gaps(series, max_gap):
+    numeric = pd.to_numeric(series, errors='coerce')
+    missing = numeric.isna()
+    if not missing.any():
+        return numeric
+    gap_group = missing.ne(missing.shift(fill_value=False)).cumsum()
+    gap_length = missing.groupby(gap_group).transform('sum')
+    candidate = numeric.interpolate(method='linear', limit_area='inside')
+    fill_mask = missing & (gap_length <= max_gap) & candidate.notna()
+    result = numeric.copy()
+    result.loc[fill_mask] = candidate.loc[fill_mask]
+    return result
+
+
 def prepare_model_input(df):
-    """
-    把傳進來的 df 四欄都轉成 numpy array，並補 0（保留舊邏輯）。
-    """
+    """短い内部欠測だけを補間し、夜間の日照空欄だけを0として扱う。"""
+    work = df.copy().reset_index(drop=True)
+    sunshine = pd.to_numeric(work['日照時間(時間)'], errors='coerce')
+    day_keys = work['年月日時'].dt.normalize()
+    for _, day_index in work.groupby(day_keys).groups.items():
+        positions = list(day_index)
+        valid = [pos for pos in positions if pd.notna(sunshine.loc[pos])]
+        if not valid:
+            continue
+        first_valid, last_valid = valid[0], valid[-1]
+        night = [pos for pos in positions if (pos < first_valid or pos > last_valid) and pd.isna(sunshine.loc[pos])]
+        sunshine.loc[night] = 0.0
+    work['日照時間(時間)'] = sunshine
+
+    for col, max_gap in MAX_INTERPOLATION_GAP_HOURS.items():
+        work[col] = interpolate_short_internal_gaps(work[col], max_gap)
+    work['風速(m/s)'] = work['風速(m/s)'].clip(lower=0)
+    work['日照時間(時間)'] = work['日照時間(時間)'].clip(lower=0, upper=1)
+    work['降水量(mm)'] = pd.to_numeric(work['降水量(mm)'], errors='coerce')
+
     cols = ['気温(℃)', '風速(m/s)', '降水量(mm)', '日照時間(時間)']
     arrays = []
     for col in cols:
-        arr = pd.to_numeric(df[col], errors='coerce')
-        # 補 0
-        arr.fillna(0, inplace=True)
-        arrays.append(arr.values)
-        if DEBUG:
-            logger.debug(f"{col} NaN 數量 (prepare 後): {np.isnan(arr).sum()}")
+        arrays.append(work[col].to_numpy(dtype=float))
     return arrays
 
 
@@ -124,8 +154,10 @@ def koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d):
     此處假設輸入皆為連續 5 日（120 小時）的資料。
     """
     rainfall_1600_0700 = rainfall_5d[88:104]
-    sun_shine_1600_0700 = sun_shine_5d[88:104]
-    wind_1600_0700 = wind_5d[88:104]
+    sun_shine_1600_0700 = sun_shine_5d[88:104].copy()
+    wind_1600_0700 = wind_5d[88:104].copy()
+    # Criterion 1-4: same-hour rain with exactly 3 m/s wind is treated as 2 m/s.
+    wind_1600_0700[(rainfall_1600_0700 > 0) & (wind_1600_0700 == 3)] = 2
     hour = 16
     leaf_wet = False
     leaf_wet_dict = {}
@@ -134,6 +166,8 @@ def koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d):
     for rainfall, sunshine, wind in zip(rainfall_1600_0700, sun_shine_1600_0700, wind_1600_0700):
         if key < 15:
             if rainfall_1600_0700[key+1] > 0:
+                if not leaf_wet:
+                    accumulate_sunshine = 0
                 leaf_wet = True
         if rainfall_1600_0700[key] > 0 and sun_shine_1600_0700[key] == 0.1:
             sun_shine_1600_0700[key] = 0
@@ -150,7 +184,7 @@ def koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d):
                 leaf_wet = False 
             if (wind_1600_0700[key+1] >= 4) and (hour >= 16 or hour <= 4):
                 leaf_wet = False 
-        if (hour >= 4 or hour <= 7) and ((rainfall == 0 and wind >= 3) or (rainfall > 0 and wind >= 4)):
+        if (4 <= hour <= 7) and ((rainfall == 0 and wind >= 3) or (rainfall > 0 and wind >= 4)):
             leaf_wet = False   
         leaf_wet_dict[hour] = leaf_wet
         hour = (hour + 1) % 24
@@ -164,7 +198,7 @@ def koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d):
     for h in range(8, 16):
         leaf_wet_dict[h] = False
     for rainfall, sunshine, wind in zip(rainfall_0600_1600, sun_shine_0600_1600, wind_0600_1600):
-        if hour > 7 and hour < 16:
+        if 6 <= hour < 16:
             if rainfall > 0:
                 if wind_5d[key-3] < 3 and sun_shine_5d[key-3] <= 0.1 and hour-3 > 7:
                     leaf_wet_dict[hour-3] = True    
@@ -194,14 +228,20 @@ def koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d):
         hour = (hour + 1) % 24
         key += 1
 
-    wind_1600_1500 = wind_5d[88:112]
     rainfall_1600_1500 = rainfall_5d[88:112]
-    for hr in range(16, 40):   
-        if rainfall_1600_1500[hr-16] > 4:
-            for ineffective_hour in range(hr-9, hr+10):
-                if ineffective_hour >= 16 and ineffective_hour <= 40:
-                    hour_now = ineffective_hour % 24
-                    leaf_wet_dict[hour_now] = -2
+    heavy_rain_event_starts = []
+    for idx, rainfall in enumerate(rainfall_1600_1500):
+        if rainfall >= 4:
+            heavy_rain_event_starts.append(idx)
+        if (rainfall >= 3 and idx + 1 < len(rainfall_1600_1500)
+                and rainfall_1600_1500[idx + 1] >= 3
+                and (idx == 0 or rainfall_1600_1500[idx - 1] < 3)):
+            heavy_rain_event_starts.append(idx)
+    for event_idx in sorted(set(heavy_rain_event_starts)):
+        event_hour = 16 + event_idx
+        for ineffective_hour in range(event_hour - 9, event_hour + 10):
+            if 16 <= ineffective_hour < 40:
+                leaf_wet_dict[ineffective_hour % 24] = -2
 
     start = False
     end = False
@@ -221,14 +261,15 @@ def koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d):
     if wet_period_hrs != 0:
         temp_avg = temp_avg / wet_period_hrs
 
-    temp_towetness_hour_lower_limit = {15:17, 16:15, 17:14, 18:13, 19:12, 20:11, 21:10, 22:10, 23:10, 24:10, 25:10}
+    temp_towetness_hour_lower_limit = {15:17, 16:15, 17:14, 18:13, 19:12, 20:11, 21:11, 22:10, 23:10, 24:10, 25:10}
     temp_5d_mean = temp_5d.mean()
     blast_score = 5
     if wet_period_hrs < 10:
         blast_score = -1   
     else:            
         if 15 <= temp_avg <= 25:
-            if wet_period_hrs < temp_towetness_hour_lower_limit[round(temp_avg)]:
+            table_temp = int(math.floor(temp_avg + 0.5))
+            if wet_period_hrs < temp_towetness_hour_lower_limit[table_temp]:
                 blast_score = 4
         if temp_avg < 15 or temp_avg > 25:
             blast_score = 3
@@ -256,7 +297,13 @@ def calculate_blast_risk(station_id, date_str, base_dir):
         if df is None:
             return None
 
-        sub = df[(df['年月日時'] >= start) & (df['年月日時'] <= end)].copy()
+        expected_index = pd.date_range(start, end, freq='h')
+        sub = (df.sort_values('年月日時')
+                 .drop_duplicates(subset=['年月日時'], keep='last')
+                 .set_index('年月日時')
+                 .reindex(expected_index)
+                 .rename_axis('年月日時')
+                 .reset_index())
         logger.debug(f"{station_id} {date_str} 篩出 {sub.shape[0]} 筆")
 
         # 如果資料筆數不對，直接放棄
@@ -264,19 +311,18 @@ def calculate_blast_risk(station_id, date_str, base_dir):
             logger.error(f"{station_id} {date_str} 資料長度 {sub.shape[0]} != 120")
             return None
 
-        # 先檢查其他三欄的 NaN 數量
-        other_cols = ['気温(℃)', '風速(m/s)', '降水量(mm)']
-        nan_counts = sub[other_cols].isna().sum()
-        for col, cnt in nan_counts.items():
-            if cnt > 20:
-                logger.warning(f"{station_id} {date_str} 欄位 {col} 有 {cnt} 個 NaN，品質不足，跳過")
-                return None
-
-        # 只對日照時間做 fillna(0)
-        sub['日照時間(時間)'] = sub['日照時間(時間)'].fillna(0)
-
-        # 轉陣列並補 0（prepare_model_input 會對四欄都補）
+        # 依變數性質處理短缺口；降水不內插。
         temp, wind, rain, sun = prepare_model_input(sub)
+
+        required = {
+            'temperature': temp,
+            'wind': wind[88:115],
+            'rainfall': rain[88:113],
+            'sunshine': sun[88:115],
+        }
+        if any(np.isnan(values).any() for values in required.values()):
+            logger.warning(f"{station_id} {date_str} 關鍵時段仍有無法安全補值的缺測，跳過")
+            return None
 
         # 最後跑模型
         _, res = koshimizu_model(temp, wind, rain, sun)

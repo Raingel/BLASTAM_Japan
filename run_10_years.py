@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import gzip
+import math
 def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
     """
     All parameters are FIVE-day HOURLY (0000–2300) data in numpy.array()
@@ -85,8 +86,10 @@ def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
     morning, unless following conditions happen
     """
     rainfall_1600_0700=rainfall_5d[88:104]
-    sun_shine_1600_0700=sun_shine_5d[88:104]
-    wind_1600_0700=wind_5d[88:104]
+    sun_shine_1600_0700=sun_shine_5d[88:104].copy()
+    wind_1600_0700=wind_5d[88:104].copy()
+    # Criterion 1-4: same-hour rain with exactly 3 m/s wind is treated as 2 m/s.
+    wind_1600_0700[(rainfall_1600_0700 > 0) & (wind_1600_0700 == 3)] = 2
     hour=16
     leaf_wet=False
     leaf_wet_dict={}
@@ -95,6 +98,8 @@ def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
     for rainfall, sunshine, wind in zip(rainfall_1600_0700,sun_shine_1600_0700,wind_1600_0700):
         if (key<15): #set index bounding
             if (rainfall_1600_0700[key+1]>0):  #葉⾯湿潤時間は⾬の記録時間の1時間前からはじまり
+                if not leaf_wet:
+                    accumulate_sunshine=0
                 leaf_wet=True
 
         if (rainfall_1600_0700[key]>0 and sun_shine_1600_0700[key]==0.1):
@@ -122,7 +127,7 @@ def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
                 leaf_wet=False 
         
         #午前4時から午前7時までは1時間でも3m以上の⾵速があればその時間で中断とする。ただし,降⾬と同じ時間の3mの⾵速は2mとみなす。
-        if (hour>=4 or hour<=7) and ((rainfall==0 and wind>=3) or (rainfall>0 and wind>=4)):
+        if (4<=hour<=7) and ((rainfall==0 and wind>=3) or (rainfall>0 and wind>=4)):
                 leaf_wet=False   
         #debug
         #print ("{:2d} hour, rainfall: {}, sunshine:{}, wind:{}, leaf_wet: {}".format(hour,rainfall,sunshine,wind,leaf_wet))
@@ -165,7 +170,7 @@ def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
     leaf_wet_dict[14]=False
     leaf_wet_dict[15]=False
     for rainfall, sunshine, wind in zip(rainfall_0600_1600,sun_shine_0600_1600,wind_0600_1600):
-        if (hour>7 and hour<16): #from 0800 to 1500
+        if (6<=hour<16): # criterion 2 covers rainfall from 0600; 1600 belongs to the next night period
             #debug
             #print ("{:2d} hour, rainfall: {}, sunshine:{}, wind:{}, leaf_wet: {}".format(hour,rainfall,sunshine,wind,leaf_wet))
             if (rainfall>0):
@@ -205,14 +210,20 @@ def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
 
     #基準 5   l 時間 4mm以上, 3 mmでも２時間以上連続する降⾬があるとき
     #降⾬後の9時間,⼜は降⾬前9時間以内にはじまった葉⾯湿潤時間はいもち病の侵⼊に無効とみなす
-    wind_1600_1500=wind_5d[88:112]
     rainfall_1600_1500=rainfall_5d[88:112]
-    for hour in range(16,40):   
-        if rainfall_1600_1500[hour-16]>4:
-            for ineffective_hour in range(hour-9,hour+10):
-                 if (ineffective_hour>=16 and ineffective_hour<=40):
-                    hour_now=ineffective_hour % 24
-                    leaf_wet_dict[hour_now] = -2
+    heavy_rain_event_starts=[]
+    for idx, rainfall in enumerate(rainfall_1600_1500):
+        if rainfall>=4:
+            heavy_rain_event_starts.append(idx)
+        if (rainfall>=3 and idx+1<len(rainfall_1600_1500)
+                and rainfall_1600_1500[idx+1]>=3
+                and (idx==0 or rainfall_1600_1500[idx-1]<3)):
+            heavy_rain_event_starts.append(idx)
+    for event_idx in sorted(set(heavy_rain_event_starts)):
+        event_hour=16+event_idx
+        for ineffective_hour in range(event_hour-9,event_hour+10):
+            if 16<=ineffective_hour<40:
+                leaf_wet_dict[ineffective_hour % 24] = -2
                     
     #The hour judged as invalid by Rule 5 is expressed as -2
 
@@ -244,7 +255,7 @@ def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
     #あるいは湿潤時間中の平均気温が 15～21℃であっても、その継続時間が第 1 表の湿潤時間
     #より若干小さい場合である。「好適条件なし」とは、湿潤時間が 10 時間未満の場合である。 
     
-    temp_towetness_hour_lower_limit={15:17, 16:15, 17:14, 18:13, 19:12, 20:11, 21:10, 22:10, 23:10, 24:10, 25:10}
+    temp_towetness_hour_lower_limit={15:17, 16:15, 17:14, 18:13, 19:12, 20:11, 21:11, 22:10, 23:10, 24:10, 25:10}
     temp_5d_mean=temp_5d.mean()
     
     #Scoring formula modified on 24/08/27
@@ -253,7 +264,8 @@ def koshimizu_model(temp_5d,wind_5d,rainfall_5d,sun_shine_5d):
         blast_score=-1   
     else:            
         if (temp_avg>=15 and temp_avg<=25): #平均気温が 15～21℃であっても、その継続時間が第 1 表の湿潤時間より若干小さい場合である
-            if (wet_period_hrs < temp_towetness_hour_lower_limit[round(temp_avg)]):
+            table_temp=int(math.floor(temp_avg+0.5))
+            if (wet_period_hrs < temp_towetness_hour_lower_limit[table_temp]):
                 blast_score=4
                 
         if (temp_avg<15 or temp_avg>25): #湿潤時間中の平均気温が 15～25℃の範囲内にないか
@@ -298,14 +310,49 @@ def load_weather_data(station_id, start_date, end_date):
     weather_data = pd.concat(data_frames)
     return weather_data
 
+
+MAX_INTERPOLATION_GAP_HOURS = {'気温(℃)': 3, '風速(m/s)': 3, '日照時間(時間)': 2}
+
+
+def interpolate_short_internal_gaps(series, max_gap):
+    numeric = pd.to_numeric(series, errors='coerce')
+    missing = numeric.isna()
+    if not missing.any():
+        return numeric
+    gap_group = missing.ne(missing.shift(fill_value=False)).cumsum()
+    gap_length = missing.groupby(gap_group).transform('sum')
+    candidate = numeric.interpolate(method='linear', limit_area='inside')
+    fill_mask = missing & (gap_length <= max_gap) & candidate.notna()
+    result = numeric.copy()
+    result.loc[fill_mask] = candidate.loc[fill_mask]
+    return result
+
+
 def prepare_model_input(five_day_data):
-    """
-    Prepares the input for the koshimizu_model from the five-day weather data.
-    """
-    temp_5d = five_day_data['気温(℃)'].values
-    wind_5d = five_day_data['風速(m/s)'].values
-    rainfall_5d = five_day_data['降水量(mm)'].values
-    sun_shine_5d = five_day_data['日照時間(時間)'].fillna(0).values
+    """Prepare arrays while avoiding broad fill-zero of true missing observations."""
+    work = five_day_data.copy().reset_index(drop=True)
+    sunshine = pd.to_numeric(work['日照時間(時間)'], errors='coerce')
+    day_keys = work['年月日時'].dt.normalize()
+    for _, day_index in work.groupby(day_keys).groups.items():
+        positions = list(day_index)
+        valid = [pos for pos in positions if pd.notna(sunshine.loc[pos])]
+        if not valid:
+            continue
+        first_valid, last_valid = valid[0], valid[-1]
+        night = [pos for pos in positions if (pos < first_valid or pos > last_valid) and pd.isna(sunshine.loc[pos])]
+        sunshine.loc[night] = 0.0
+    work['日照時間(時間)'] = sunshine
+
+    for col, max_gap in MAX_INTERPOLATION_GAP_HOURS.items():
+        work[col] = interpolate_short_internal_gaps(work[col], max_gap)
+    work['風速(m/s)'] = work['風速(m/s)'].clip(lower=0)
+    work['日照時間(時間)'] = work['日照時間(時間)'].clip(lower=0, upper=1)
+    work['降水量(mm)'] = pd.to_numeric(work['降水量(mm)'], errors='coerce')
+
+    temp_5d = work['気温(℃)'].to_numpy(dtype=float)
+    wind_5d = work['風速(m/s)'].to_numpy(dtype=float)
+    rainfall_5d = work['降水量(mm)'].to_numpy(dtype=float)
+    sun_shine_5d = work['日照時間(時間)'].to_numpy(dtype=float)
     return temp_5d, wind_5d, rainfall_5d, sun_shine_5d
 
 def calculate_blast_risk(station_id, date):
@@ -316,7 +363,13 @@ def calculate_blast_risk(station_id, date):
         #因為該月的第一天的00時的資料會在上一個月的檔案內，所以如果start_date是該月的第一天，要把start_date往前推一天
         first_day_shift = timedelta(days=1) if start_date.day == 1 else timedelta(days=0)
         weather_data = load_weather_data(station_id, start_date - first_day_shift, end_date)
-        five_day_data = weather_data[(weather_data['年月日時'] >= start_date) & (weather_data['年月日時'] <= end_date)]
+        expected_index = pd.date_range(start_date, end_date, freq='h')
+        five_day_data = (weather_data.sort_values('年月日時')
+                         .drop_duplicates(subset=['年月日時'], keep='last')
+                         .set_index('年月日時')
+                         .reindex(expected_index)
+                         .rename_axis('年月日時')
+                         .reset_index())
 
         if len(five_day_data) != 120:
             #print(five_day_data['年月日時'])
@@ -325,9 +378,13 @@ def calculate_blast_risk(station_id, date):
                 pass
             raise ValueError(f"Data length error, For {start_date} to {end_date} at station {station_id}, {len(five_day_data)} provided")
         temp_5d, wind_5d, rainfall_5d, sun_shine_5d = prepare_model_input(five_day_data)
-        #如果temp_5d, wind_5d, rainfall_5d, sun_shine_5d中有任何直是nan的話，就不做計算
-        if np.isnan(temp_5d).any() or np.isnan(wind_5d).any() or np.isnan(rainfall_5d).any() or np.isnan(sun_shine_5d).any():
-            #print(f"{temp_5d}, {wind_5d}, {rainfall_5d}, {sun_shine_5d}")
+        required = {
+            'temperature': temp_5d,
+            'wind': wind_5d[88:115],
+            'rainfall': rainfall_5d[88:113],
+            'sunshine': sun_shine_5d[88:115],
+        }
+        if any(np.isnan(values).any() for values in required.values()):
             return None
         leaf_wet_dict, results = koshimizu_model(temp_5d, wind_5d, rainfall_5d, sun_shine_5d)
         return results
