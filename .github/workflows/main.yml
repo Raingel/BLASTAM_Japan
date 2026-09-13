@@ -32,7 +32,11 @@ jobs:
         git config --global user.name 'github-actions'
         git config --global user.email 'github-actions@github.com'
         git add data/
-        git commit -m "BLASTAM Risk Assessment results for $(date +'%Y-%m-%d')"
-        git push origin main
+        if git diff --cached --quiet; then
+          echo "No result changes to commit."
+        else
+          git commit -m "BLASTAM Risk Assessment results for $(date +'%Y-%m-%d')"
+          git push origin main
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
